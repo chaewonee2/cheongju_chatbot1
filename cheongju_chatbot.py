@@ -1,38 +1,46 @@
 import streamlit as st
 import pandas as pd
 import requests
+import re
 from openai import OpenAI
 
 # GPT Key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # CSV 데이터 로드
-data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
+data = pd.read_csv("/mnt/data/cj_data_final.csv", encoding="cp949").drop_duplicates()
 
-# 카페 포맷 함수 (존댓말 + 리뷰 없으면 생략)
+# 카페 포맷 함수 (카페별 최대 2~3개 리뷰만, 없으면 생략)
 def format_cafes(cafes_df):
-    cafes_df = cafes_df.drop_duplicates()
-    n = len(cafes_df)
+    cafes_df = cafes_df.drop_duplicates(subset=['c_name', 'c_value', 'c_review'])
+    result = []
 
-    if n == 0:
+    if len(cafes_df) == 0:
         return ("☕ 현재 이 관광지 주변에 등록된 카페 정보는 없습니다.  \n"
                 "하지만 근처에 숨은 보석 같은 공간이 있을 수 있으니,  \n"
                 "지도를 활용해 주변을 탐방해보시는 것도 좋겠습니다!")
 
-    elif n == 1:
+    elif len(cafes_df) == 1:
         row = cafes_df.iloc[0]
-        review_line = f"“{row['c_review']}”\n작고 조용한 분위기에서 여유를 느끼기 좋습니다." if "없음" not in row['c_review'] else ""
-        return f"""☕ **주변 추천 카페**\n
-- **{row['c_name']}** (⭐ {row['c_value']})  
-{review_line}"""
+        if "없음" not in row["c_review"]:
+            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})  \n“{row['c_review']}”"""
+        else:
+            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})"""
 
     else:
-        result = ["☕ **주변에 이런 카페들이 있어요**\n"]
-        for _, row in cafes_df.iterrows():
-            if "없음" not in row['c_review']:
-                result.append(f"- **{row['c_name']}** (⭐ {row['c_value']})  \n“{row['c_review']}”")
+        grouped = cafes_df.groupby(['c_name', 'c_value'])
+        result.append("☕ **주변에 이런 카페들이 있어요**  \n")
+        for (name, value), group in grouped:
+            reviews = group['c_review'].dropna().unique()
+            reviews = [r for r in reviews if "없음" not in r]
+            top_reviews = reviews[:3]
+
+            if top_reviews:
+                review_text = "\n".join([f"“{r}”" for r in top_reviews])
+                result.append(f"- **{name}** (⭐ {value})  \n{review_text}")
             else:
-                result.append(f"- **{row['c_name']}** (⭐ {row['c_value']})")
+                result.append(f"- **{name}** (⭐ {value})")
+
         return "\n\n".join(result)
 
 # 초기 세션 설정
@@ -52,6 +60,7 @@ for msg in st.session_state.messages[1:]:
 
 st.divider()
 
+# 입력 폼 처리
 with st.form("chat_form"):
     user_input = st.text_input("지도에서 선택한 관광지들을 여기에 입력해주세요! ( 쉼표(,)로 구분해 주세요. 예: 청주 신선주, 청주 청녕각)")
     submitted = st.form_submit_button("보내기")
@@ -60,7 +69,7 @@ if submitted and user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
 
     with st.spinner("청주의 아름다움을 정리 중입니다..."):
-        places = [p.strip() for p in user_input.split(',')]
+        places = [p.strip() for p in user_input.split(',') if p.strip()]
         response_blocks = []
 
         # GPT 날씨 생성 (존댓말 톤)
@@ -88,7 +97,7 @@ if submitted and user_input:
                 cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates()
                 cafe_info = format_cafes(cafes)
             else:
-                cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. GPT가 대신 주변 장소를 소개드릴 수 있어요."
+                cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. 제가 대신 주변 카페들을 소개드릴 수 있어요."
 
             # 관광지 리뷰 정리
             reviews = matched['t_review'].dropna().unique()
@@ -99,7 +108,7 @@ if submitted and user_input:
             else:
                 review_block = ""
 
-            full_block = f"---\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
+            full_block = f"---\n\n### 🏛️ **{place}**\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
             response_blocks.append(full_block)
 
         final_response = "\n\n".join(response_blocks)
