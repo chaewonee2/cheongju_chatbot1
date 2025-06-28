@@ -10,31 +10,30 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
 # 날씨 API 함수
-def get_weather_summary(city="Cheongju"):
+def get_weather_summary():
     try:
         API_KEY = st.secrets["weather"]["WEATHER_API_KEY"]
-        url = f"http://api.openweathermap.org/data/2.5/weather?q={city}&appid={API_KEY}&units=metric&lang=kr"
+        url = f"http://api.openweathermap.org/data/2.5/weather?q=Cheongju,KR&appid={API_KEY}&units=metric&lang=kr"
         res = requests.get(url).json()
 
         if res.get("cod") != 200:
-            return "🌤️ 현재 날씨 정보를 불러오지 못했어요."
+            return "🌤️ 현재 청주의 날씨 정보를 불러오지 못했어요."
 
         temp = res["main"]["temp"]
         weather = res["weather"][0]["description"]
 
-        # 간결한 기온 + 날씨 팁
         if temp < 10:
-            tip = "❄️ 많이 쌀쌀해요. 따뜻한 옷 꼭 챙기세요!"
+            tip = "❄️ 꽤 쌀쌀해요. 따뜻한 옷 꼭 챙기세요!"
         elif temp < 20:
             tip = "🧥 선선한 날씨네요. 가벼운 겉옷 추천드려요."
         elif temp < 28:
-            tip = "☀️ 따뜻하고 활동하기 좋은 날씨예요!"
+            tip = "☀️ 따뜻하고 활동하기 좋아요!"
         else:
-            tip = "🌞 더운 날씨네요. 물 자주 마시고, 모자 챙기세요!"
+            tip = "🌞 더운 날씨예요. 수분 섭취 꼭 하세요!"
 
-        return f"""🌤️ 지금 청주의 날씨는 **{weather}**, 기온은 **{temp:.1f}°C**입니다.\n{tip}"""
-    except:
-        return "🌤️ 날씨 정보를 가져오는 중 문제가 발생했어요."
+        return f"🌤️ 지금 청주의 날씨는 **{weather}**, 기온은 **{temp:.1f}°C**입니다.\\n{tip}"
+    except Exception as e:
+        return f\"🌤️ 날씨 정보를 가져오는 중 문제가 발생했어요: {e}\"
 
 # 카페 포맷 함수
 def format_cafes(cafes_df):
