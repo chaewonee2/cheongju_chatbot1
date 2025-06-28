@@ -8,7 +8,7 @@ from openai import OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # CSV 데이터 로드
-data = pd.read_csv("/mnt/data/cj_data_final.csv", encoding="cp949").drop_duplicates()
+data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
 # 카페 포맷 함수 (카페별 최대 2~3개 리뷰만, 없으면 생략)
 def format_cafes(cafes_df):
