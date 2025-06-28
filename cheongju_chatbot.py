@@ -3,7 +3,7 @@ from openai import OpenAI
 import pandas as pd
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-data = pd.read_csv("/mnt/data/cj_data_final.csv", encoding="cp949").drop_duplicates()
+data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
 # 초기 시스템 메시지
 if "messages" not in st.session_state:
