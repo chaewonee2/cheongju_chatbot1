@@ -1,39 +1,44 @@
 import streamlit as st
-import pandas as pd
-import requests
 from openai import OpenAI
+import pandas as pd
 
-# GPT & 날씨 API Key
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
-
-# CSV 데이터 로드
 data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
-# 날씨 API 함수
-def get_weather_summary():
-    try:
-        API_KEY = st.secrets["weather"]["WEATHER_API_KEY"]
-        url = f"http://api.openweathermap.org/data/2.5/weather?q=Cheongju,KR&appid={API_KEY}&units=metric&lang=kr"
-        res = requests.get(url).json()
+# 초기 시스템 메시지
+if "messages" not in st.session_state:
+    st.session_state.messages = [
+        {
+            "role": "system",
+            "content": """
+너는 청주 문화유산을 감성적으로 소개하는 관광 가이드 챗봇이야.
 
-        if res.get("cod") != 200:
-            return "🌤️ 현재 청주의 날씨 정보를 불러오지 못했어요."
+[설명 순서]
+1. 청주의 오늘 날씨와 여행 팁을 안내해줘 ☀️☔
+2. 사용자가 입력한 각 관광지를 아래 순서로 소개해줘:
+   • 관광지 이름 강조 + 이모지 사용 (예: 🏛️ 정북동 토성)
+   • 역사, 의미, 특징, 자연 분위기, 여행 팁 포함
+   • 문단마다 줄바꿈, 감성적 표현, 여행자 입장에서 말해줘
+3. 해당 관광지 주변의 카페는 시스템(CSV)을 기반으로 소개해줘.
+   - 카페 이름, 평점, 리뷰 요약을 예쁘게 풀어서 보여줘 ☕
+4. 만약 CSV에 없는 관광지면 GPT가 직접 설명해도 괜찮아!
+"""
+        }
+    ]
 
-        temp = res["main"]["temp"]
-        weather = res["weather"][0]["description"]
+st.title("청주 문화 챗봇 ✨")
 
-        if temp < 10:
-            tip = "❄️ 꽤 쌀쌀해요. 따뜻한 옷 꼭 챙기세요!"
-        elif temp < 20:
-            tip = "🧥 선선한 날씨네요. 가벼운 겉옷 추천드려요."
-        elif temp < 28:
-            tip = "☀️ 따뜻하고 활동하기 좋아요!"
-        else:
-            tip = "🌞 더운 날씨예요. 수분 섭취 꼭 하세요!"
+# 이전 메시지 표시
+for msg in st.session_state.messages[1:]:
+    if msg["role"] == "user":
+        st.markdown(f"<div style='text-align: right; background-color: #dcf8c6; border-radius: 10px; padding: 8px; margin: 5px 0;'>{msg['content']}</div>", unsafe_allow_html=True)
+    elif msg["role"] == "assistant":
+        st.markdown(f"<div style='text-align: left; background-color: #ffffff; border-radius: 10px; padding: 8px; margin: 5px 0;'>{msg['content']}</div>", unsafe_allow_html=True)
 
-        return f"🌤️ 지금 청주의 날씨는 **{weather}**, 기온은 **{temp:.1f}°C**입니다.\\n{tip}"
-    except Exception as e:
-        return f\"🌤️ 날씨 정보를 가져오는 중 문제가 발생했어요: {e}\"
+st.divider()
+
+# 사용자 입력창
+user_input = st.text_input("궁금한 청주의 관광지를 입력해보세요! (예: 청남대, 문의문화재단지)")
 
 # 카페 포맷 함수
 def format_cafes(cafes_df):
@@ -48,25 +53,7 @@ def format_cafes(cafes_df):
 
     return "\n\n".join(result)
 
-# 초기 세션 설정
-if "messages" not in st.session_state:
-    st.session_state.messages = [
-        {"role": "system", "content": "너는 청주 문화유산을 소개하는 감성 관광 가이드 챗봇이야."}
-    ]
-
-st.title("청주 문화 챗봇 ✨")
-
-# 이전 메시지 출력
-for msg in st.session_state.messages[1:]:
-    if msg["role"] == "user":
-        st.markdown(f"<div style='text-align: right; background-color: #dcf8c6; border-radius: 10px; padding: 8px; margin: 5px 0;'>{msg['content']}</div>", unsafe_allow_html=True)
-    elif msg["role"] == "assistant":
-        st.markdown(f"<div style='text-align: left; background-color: #ffffff; border-radius: 10px; padding: 8px; margin: 5px 0;'>{msg['content']}</div>", unsafe_allow_html=True)
-
-st.divider()
-
-user_input = st.text_input("궁금한 청주의 관광지를 입력해보세요! (예: 청남대, 문의문화재단지)")
-
+# 버튼 클릭 시 실행
 if st.button("보내기") and user_input:
     st.session_state.messages.append({"role": "user", "content": user_input})
 
@@ -74,15 +61,20 @@ if st.button("보내기") and user_input:
         places = [p.strip() for p in user_input.split(',')]
         response_blocks = []
 
-        # ✅ 날씨 요약 추가
-        weather_intro = get_weather_summary("Cheongju")
-        response_blocks.append(weather_intro)
+        # 날씨 소개
+        weather_intro = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "너는 청주 문화관광 가이드야. 오늘 청주의 날씨를 여행자에게 소개해줘. 옷차림, 우산 팁도 함께."}
+            ]
+        ).choices[0].message.content
+        response_blocks.append(f"🌤️ {weather_intro}")
 
-        # ✅ 관광지별 설명 + 카페 정보
+        # 관광지별 설명 + 카페 매칭
         for place in places:
             matched = data[data['t_name'].str.contains(place, na=False)]
 
-            # GPT에게 관광지 설명 요청
+            # GPT에게 관광지 설명 생성 요청
             gpt_place_response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
@@ -91,12 +83,14 @@ if st.button("보내기") and user_input:
                 ]
             ).choices[0].message.content
 
+            # 카페 정보
             if not matched.empty:
                 cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates().head(3)
                 cafe_info = format_cafes(cafes)
             else:
                 cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾을 수 없어. 근처 카페는 GPT가 임의로 추천할 수 있어요!"
 
+            # 조합
             full_block = f"---\n\n{gpt_place_response}\n\n{cafe_info}"
             response_blocks.append(full_block)
 
