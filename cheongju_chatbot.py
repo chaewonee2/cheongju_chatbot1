@@ -10,7 +10,7 @@ client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 # CSV 데이터 로드
 data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
-# 카페 포맷 함수 (카페별 최대 2~3개 리뷰만, 없으면 생략)
+# 카페 포맷 함수 (카페별 최대 2~3개 리뷰만, 없으면 생략 또는 메시지 출력)
 def format_cafes(cafes_df):
     cafes_df = cafes_df.drop_duplicates(subset=['c_name', 'c_value', 'c_review'])
     result = []
@@ -22,24 +22,24 @@ def format_cafes(cafes_df):
 
     elif len(cafes_df) == 1:
         row = cafes_df.iloc[0]
-        if "없음" not in row["c_review"]:
+        if all(x not in row["c_review"] for x in ["없음", "없읍"]):
             return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})  \n“{row['c_review']}”"""
         else:
-            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})"""
+            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})  \n리뷰가 아직 존재하지 않아요."""
 
     else:
         grouped = cafes_df.groupby(['c_name', 'c_value'])
         result.append("☕ **주변에 이런 카페들이 있어요**  \n")
         for (name, value), group in grouped:
             reviews = group['c_review'].dropna().unique()
-            reviews = [r for r in reviews if "없음" not in r]
+            reviews = [r for r in reviews if all(x not in r for x in ["없음", "없읍"])]
             top_reviews = reviews[:3]
 
             if top_reviews:
                 review_text = "\n".join([f"“{r}”" for r in top_reviews])
                 result.append(f"- **{name}** (⭐ {value})  \n{review_text}")
             else:
-                result.append(f"- **{name}** (⭐ {value})")
+                result.append(f"- **{name}** (⭐ {value})  \n리뷰가 아직 존재하지 않아요.")
 
         return "\n\n".join(result)
 
@@ -66,50 +66,4 @@ with st.form("chat_form"):
     submitted = st.form_submit_button("보내기")
 
 if submitted and user_input:
-    st.session_state.messages.append({"role": "user", "content": user_input})
-
-    with st.spinner("청주의 아름다움을 정리 중입니다..."):
-        places = [p.strip() for p in user_input.split(',') if p.strip()]
-        response_blocks = []
-
-        # GPT 날씨 생성 (존댓말 톤)
-        weather_intro = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=[
-                {"role": "system", "content": "당신은 청주 관광을 소개하는 감성적이고 공손한 가이드입니다."},
-                {"role": "user", "content": "오늘 청주의 날씨와 여행 팁을 공손한 말투로 소개해 주세요."}
-            ]
-        ).choices[0].message.content
-        response_blocks.append(f"\U0001F324️ {weather_intro}")
-
-        for place in places:
-            matched = data[data['t_name'].str.contains(place, na=False)]
-
-            gpt_place_response = client.chat.completions.create(
-                model="gpt-3.5-turbo",
-                messages=[
-                    {"role": "system", "content": "당신은 청주 문화유산을 소개하는 공손하고 감성적인 관광 가이드입니다."},
-                    {"role": "user", "content": f"{place}에 대해 감성적이고 역사적인 설명을 해 주세요. 공손한 말투로, 이모지와 줄바꿈도 활용해 주세요."}
-                ]
-            ).choices[0].message.content
-
-            if not matched.empty:
-                cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates()
-                cafe_info = format_cafes(cafes)
-            else:
-                cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. 제가 대신 주변 카페들을 소개드릴 수 있어요."
-
-            # 관광지 리뷰 정리
-            reviews = matched['t_review'].dropna().unique()
-            if len(reviews) > 0:
-                top_reviews = list(reviews)[:3]
-                review_text = "\n".join([f"“{r}”" for r in top_reviews])
-                review_block = f"\n\n💬 **방문자 리뷰 중 일부**\n{review_text}"
-            else:
-                review_block = ""
-
-            full_block = f"---\n\n### 🏛️ **{place}**\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
-            response_blocks.append(full_block)
-
-        final_response = "\n\n".join(response_blocks)
-        st.session_state.messages.append({"role": "assistant", "content": final_response})
+    st.session_state.messages.appe
