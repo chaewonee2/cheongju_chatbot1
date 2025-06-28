@@ -16,20 +16,20 @@ def format_cafes(cafes_df):
     result = []
 
     if len(cafes_df) == 0:
-        return ("☕ 현재 이 관광지 주변에 등록된 카페 정보는 없습니다.  \n"
-                "하지만 근처에 숨은 보석 같은 공간이 있을 수 있으니,  \n"
-                "지도를 활용해 주변을 탐방해보시는 것도 좋겠습니다!")
+        return ("☕ 현재 이 관광지 주변에 등록된 카페 정보는 없어요.  \n"
+                "하지만 근처에 숨겨진 보석 같은 공간이 있을 수 있으니,  \n"
+                "지도를 활용해 천천히 걸어보시는 것도 추천드립니다 😊")
 
     elif len(cafes_df) == 1:
         row = cafes_df.iloc[0]
         if all(x not in row["c_review"] for x in ["없음", "없읍"]):
             return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})  \n“{row['c_review']}”"""
         else:
-            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})  \n리뷰가 아직 존재하지 않아요."""
+            return f"""☕ **주변 추천 카페**\n\n- **{row['c_name']}** (⭐ {row['c_value']})"""
 
     else:
         grouped = cafes_df.groupby(['c_name', 'c_value'])
-        result.append("☕ **주변에 이런 카페들이 있어요**  \n")
+        result.append("☕ **주변에 이런 카페들이 있어요** 🌼\n")
         for (name, value), group in grouped:
             reviews = group['c_review'].dropna().unique()
             reviews = [r for r in reviews if all(x not in r for x in ["없음", "없읍"])]
@@ -39,7 +39,7 @@ def format_cafes(cafes_df):
                 review_text = "\n".join([f"“{r}”" for r in top_reviews])
                 result.append(f"- **{name}** (⭐ {value})  \n{review_text}")
             else:
-                result.append(f"- **{name}** (⭐ {value})  \n리뷰가 아직 존재하지 않아요.")
+                result.append(f"- **{name}** (⭐ {value})")
 
         return "\n\n".join(result)
 
@@ -77,7 +77,7 @@ if submitted and user_input:
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "당신은 청주 관광을 소개하는 감성적이고 공손한 가이드입니다."},
-                {"role": "user", "content": "오늘 청주의 날씨와 여행 팁을 공손한 말투로 소개해 주세요."}
+                {"role": "user", "content": "오늘 청주의 날씨와 여행 팁을 공손하고 따뜻한 말투, 그리고 이모지를 활용해서 소개해 주세요."}
             ]
         ).choices[0].message.content
         response_blocks.append(f"\U0001F324️ {weather_intro}")
@@ -88,19 +88,34 @@ if submitted and user_input:
             gpt_place_response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=[
-                    {"role": "system", "content": "당신은 청주 문화유산을 소개하는 공손하고 감성적인 관광 가이드입니다."},
-                    {"role": "user", "content": f"{place}에 대해 감성적이고 풍부한 설명을 해 주세요. 역사적 배경, 특징, 포토스팟 등도 포함해서 관광객이 꼭 알아야 할 정보를 공손한 말투로 소개해 주세요. 줄바꿈과 이모지도 적절히 활용해 주세요. "}
+                    {"role": "system", "content": "당신은 청주 문화유산을 소개하는 감성적이고 따뜻한 말투의 공손한 관광 가이드입니다. 이모지도 풍부하게 사용하세요."},
+                    {"role": "user", "content": f"""
+여행자에게 설렘이 느껴지도록, 따뜻하고 공손한 말투로 {place}를 소개해 주세요 ✨  
+✔️ 역사적인 배경,  
+✔️ 방문 시의 분위기와 계절의 어울림 🍃🌸  
+✔️ 인근 포토스팟 📸  
+✔️ 여행자에게 추천하는 감성적인 코멘트 🌿  
+문단마다 이모지를 활용해 생동감 있게 작성해 주세요. 줄바꿈도 적절히 해 주세요.
+"""}
                 ]
             ).choices[0].message.content
 
             if not matched.empty:
                 cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates()
                 cafe_info = format_cafes(cafes)
+                
+                t_value = matched['t_value'].dropna().unique()
+                if len(t_value) > 0:
+                    score_text = f"\n\n📊 **관광지 평점**: ⭐ {t_value[0]}"
+                else:
+                    score_text = ""
             else:
                 cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. 제가 대신 주변 카페들을 소개드릴 수 있어요."
+                score_text = ""
 
             # 관광지 리뷰 정리
             reviews = matched['t_review'].dropna().unique()
+            reviews = [r for r in reviews if all(x not in r for x in ["없음", "없읍"])]
             if len(reviews) > 0:
                 top_reviews = list(reviews)[:3]
                 review_text = "\n".join([f"“{r}”" for r in top_reviews])
@@ -108,7 +123,7 @@ if submitted and user_input:
             else:
                 review_block = ""
 
-            full_block = f"---\n\n<h2 style='font-size: 24px; font-weight: bold;'>🏛️ {place}</h2>\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
+            full_block = f"---\n\n<h2 style='font-size: 24px; font-weight: bold;'>🏛️ {place}</h2>{score_text}\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
             response_blocks.append(full_block)
 
         final_response = "\n\n".join(response_blocks)
