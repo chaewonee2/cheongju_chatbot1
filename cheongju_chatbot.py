@@ -6,7 +6,7 @@ import pandas as pd
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # CSV 데이터 불러오기
-data = pd.read_csv("./cj_data_final.csv", encoding="cp949").drop_duplicates()
+data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
 
 # 세션 상태 초기화
 if "messages" not in st.session_state:
