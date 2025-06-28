@@ -41,7 +41,7 @@ if "messages" not in st.session_state:
         {"role": "system", "content": "당신은 청주 문화유산을 소개하는 감성적이고 공손한 말투의 관광 가이드 챗봇입니다."}
     ]
 
-st.title("청주 문화 관광가이드✨")
+st.title("🏞️ 청주 문화 관광가이드 🏞️")
 
 # 이전 메시지 출력
 for msg in st.session_state.messages[1:]:
@@ -53,7 +53,7 @@ for msg in st.session_state.messages[1:]:
 st.divider()
 
 with st.form("chat_form"):
-    user_input = st.text_input("궁금한 청주의 관광지를 입력해보세요! (예: 청주 신선주, 청주 청녕각)")
+    user_input = st.text_input("지도에서 선택한 관광지들을 여기에 입력해주세요! ( 쉼표(,)로 구분해 주세요. 예: 청주 신선주, 청주 청녕각)")
     submitted = st.form_submit_button("보내기")
 
 if submitted and user_input:
