@@ -6,12 +6,10 @@ import pandas as pd
 
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
-@st.cache_data
-def load_data():
-    df = pd.read_csv("cj_data.csv", encoding="utf-8-sig")
-    return df
+data = pd.read_csv("./cj_data_final.csv", encoding="cp949")
+data = data.drop_duplicates()
 
-cj_data = load_data()
+
 
 # 메시지 상태 초기화
 if "messages" not in st.session_state:
@@ -36,16 +34,20 @@ if "messages" not in st.session_state:
 - 이모티콘 🎯 🏞️ ☕ 🌸 등을 자연스럽게 사용해서 생동감을 더하고,  
   말투는 밝고 친근하게, 여행 가이드처럼 활기차고 설레는 느낌이어야 해.
 
-[카페 안내 연동 방식]
-- 관광지 주변 카페 정보(이름, 리뷰, 감성분석 등)는 시스템이 CSV 기반으로 매칭해줄 거야.
-- GPT 너는 그 데이터를 바탕으로 주변 카페 2~3곳을 자연스럽게 말로 소개해줘.
-  - 예: “이곳에서 도보 5분 이내에 *카페 청춘*이 있어요. ‘커피가 너무 맛있다’는 리뷰가 많고 전반적으로 긍정적이네요!” 😊
-- 카페 정보는 인터넷에서 직접 조사하지 말고, 시스템이 준 CSV 데이터만 사용해줘.
 
 [카페 관련 주의사항 ❌]
 - GPT 너는 주변 카페를 임의로 추천하거나 언급하지 마.
 - GPT 너는 직접 조사하거나 카페를 언급하지 마.
 - 카페 정보는 별도로 시스템(csv 파일)에서 처리하니까 절대 언급하지 말고, 소개하지도 마.
+
+
+[카페 안내 연동 방식]
+- 관광지 주변 카페 정보(이름, 리뷰, 감성분석 등)는 시스템이 CSV 기반으로 매칭해줄 거야.
+- GPT 너는 그 데이터를 바탕으로 주변 카페 자연스럽게 말로 소개해줘.
+  - 예: “이곳에서 도보 5분 이내에 *카페 청춘*이 있어요. ‘커피가 너무 맛있다’는 리뷰가 많고 전반적으로 긍정적이네요!” 😊
+- 카페 정보는 인터넷에서 직접 조사하지 말고, 시스템이 준 CSV 데이터만 사용해.
+
+
 
 [요약]
 • 먼저 날씨를 미리 안내해줘.  
@@ -79,17 +81,22 @@ for msg in st.session_state.messages[1:]:
     elif msg["role"] == "assistant":
         st.markdown(f"<div style='text-align: left; background-color: #ffffff; border-radius: 10px; padding: 8px; margin: 5px 0;'>{msg['content']}</div>", unsafe_allow_html=True)
 
-# 입력창과 버튼 (아래쪽)
 st.divider()
-user_input = st.text_input("메시지를 입력하세요", value=st.session_state.user_input, key="user_input_field")
-if st.button("보내기"):
-    if user_input:
-        st.session_state.messages.append({"role": "user", "content": user_input})
-        with st.spinner("답변 작성 중..."):
+user_input = st.text_input("메시지를 입력하세요")
+
+
+if st.button("보내기") and user_input:
+    st.session_state.messages.append({"role": "user", "content": user_input})
+    with st.spinner("검색 중입니다..."):
+        matched = data[data['t_name'].str.contains(user_input, na=False)]
+        if not matched.empty:
+            cafes = matched[['c_name', 'c_review']].drop_duplicates().head(3)
+            cafe_info = "\n".join([f"- {row['c_name']}: {row['c_review']}" for _, row in cafes.iterrows()])
+            reply = f"{user_input}에 대한 설명과 함께 추천 카페:\n{cafe_info}"
+        else:
             response = client.chat.completions.create(
                 model="gpt-3.5-turbo",
                 messages=st.session_state.messages
             )
             reply = response.choices[0].message.content
-            st.session_state.messages.append({"role": "assistant", "content": reply})
-        st.session_state.user_input = ""
+        st.session_state.messages.append({"role": "assistant", "content": reply})
