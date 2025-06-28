@@ -66,4 +66,50 @@ with st.form("chat_form"):
     submitted = st.form_submit_button("보내기")
 
 if submitted and user_input:
-    st.session_state.messages.appe
+    st.session_state.messages.append({"role": "user", "content": user_input})
+
+    with st.spinner("청주의 아름다움을 정리 중입니다..."):
+        places = [p.strip() for p in user_input.split(',') if p.strip()]
+        response_blocks = []
+
+        # GPT 날씨 생성 (존댓말 톤)
+        weather_intro = client.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "당신은 청주 관광을 소개하는 감성적이고 공손한 가이드입니다."},
+                {"role": "user", "content": "오늘 청주의 날씨와 여행 팁을 공손한 말투로 소개해 주세요."}
+            ]
+        ).choices[0].message.content
+        response_blocks.append(f"\U0001F324️ {weather_intro}")
+
+        for place in places:
+            matched = data[data['t_name'].str.contains(place, na=False)]
+
+            gpt_place_response = client.chat.completions.create(
+                model="gpt-3.5-turbo",
+                messages=[
+                    {"role": "system", "content": "당신은 청주 문화유산을 소개하는 공손하고 감성적인 관광 가이드입니다."},
+                    {"role": "user", "content": f"{place}에 대해 감성적이고 풍부한 설명을 해 주세요. 역사적 배경, 특징, 포토스팟 등도 포함해서 관광객이 꼭 알아야 할 정보를 공손한 말투로 소개해 주세요. 줄바꿈과 이모지도 적절히 활용해 주세요. "}
+                ]
+            ).choices[0].message.content
+
+            if not matched.empty:
+                cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates()
+                cafe_info = format_cafes(cafes)
+            else:
+                cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. 제가 대신 주변 카페들을 소개드릴 수 있어요."
+
+            # 관광지 리뷰 정리
+            reviews = matched['t_review'].dropna().unique()
+            if len(reviews) > 0:
+                top_reviews = list(reviews)[:3]
+                review_text = "\n".join([f"“{r}”" for r in top_reviews])
+                review_block = f"\n\n💬 **방문자 리뷰 중 일부**\n{review_text}"
+            else:
+                review_block = ""
+
+            full_block = f"---\n\n<h2 style='font-size: 24px; font-weight: bold;'>🏛️ {place}</h2>\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
+            response_blocks.append(full_block)
+
+        final_response = "\n\n".join(response_blocks)
+        st.session_state.messages.append({"role": "assistant", "content": final_response})
