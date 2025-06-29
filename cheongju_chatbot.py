@@ -8,7 +8,7 @@ from openai import OpenAI
 client = OpenAI(api_key=st.secrets["OPENAI_API_KEY"])
 
 # CSV 데이터 로드
-data = pd.read_csv("cj_data_final.csv", encoding="cp949").drop_duplicates()
+data = pd.read_csv("/mnt/data/cj_data_final.csv", encoding="cp949").drop_duplicates()
 
 # 카페 포맷 함수 (카페별 최대 2~3개 리뷰만, 없으면 생략 또는 메시지 출력)
 def format_cafes(cafes_df):
@@ -103,25 +103,34 @@ if submitted and user_input:
             if not matched.empty:
                 cafes = matched[['c_name', 'c_value', 'c_review']].drop_duplicates()
                 cafe_info = format_cafes(cafes)
-                
+
                 t_value = matched['t_value'].dropna().unique()
                 if len(t_value) > 0:
                     score_text = f"\n\n📊 **관광지 평점**: ⭐ {t_value[0]}"
                 else:
                     score_text = ""
-            else:
-                cafe_info = "\n\n❗ CSV에서 해당 관광지를 찾지 못했습니다. 제가 대신 주변 카페들을 소개드릴 수 있어요."
-                score_text = ""
 
-            # 관광지 리뷰 정리
-            reviews = matched['t_review'].dropna().unique()
-            reviews = [r for r in reviews if all(x not in r for x in ["없음", "없읍"])]
-            if len(reviews) > 0:
-                top_reviews = list(reviews)[:3]
-                review_text = "\n".join([f"“{r}”" for r in top_reviews])
-                review_block = f"\n\n💬 **방문자 리뷰 중 일부**\n{review_text}"
+                reviews = matched['t_review'].dropna().unique()
+                reviews = [r for r in reviews if all(x not in r for x in ["없음", "없읍"])]
+                if len(reviews) > 0:
+                    top_reviews = list(reviews)[:3]
+                    review_text = "\n".join([f"“{r}”" for r in top_reviews])
+                    review_block = f"\n\n💬 **방문자 리뷰 중 일부**\n{review_text}"
+                else:
+                    review_block = ""
+
             else:
+                score_text = ""
                 review_block = ""
+
+                # GPT에게 카페 추천 요청
+                cafe_info = client.chat.completions.create(
+                    model="gpt-3.5-turbo",
+                    messages=[
+                        {"role": "system", "content": "당신은 청주 지역의 감성적인 관광 가이드입니다. 공손하고 따뜻한 말투로 주변 카페를 추천하세요."},
+                        {"role": "user", "content": f"{place} 주변에 어울리는 카페를 2~3곳 추천해 주세요. 이름, 분위기, 어떤 사람에게 잘 어울리는지 등을 감성적으로 설명해 주세요. 이모지와 줄바꿈도 사용해 주세요."}
+                    ]
+                ).choices[0].message.content
 
             full_block = f"---\n\n<h2 style='font-size: 24px; font-weight: bold;'>🏛️ {place}</h2>{score_text}\n\n{gpt_place_response}{review_block}\n\n{cafe_info}"
             response_blocks.append(full_block)
